@@ -1,7 +1,62 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@inject Blazor.Services.IOpenAiService OpenAiService
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Kalle Anka AB - Personalhandboksassistent</h1>
 
-Welcome to your new app.
+<p>Test av Azure OpenAI-koppling:</p>
+
+<button class="btn btn-primary" @onclick="TestConnection" disabled="@isLoading">
+    @if (isLoading)
+    {
+        <span>Skickar "Hej" till Azure OpenAI...</span>
+    }
+    else
+    {
+        <span>Skicka "Hej" till Azure OpenAI</span>
+    }
+</button>
+
+@if (!string.IsNullOrEmpty(response))
+{
+    <div class="alert alert-success mt-3">
+        <strong>Svar från Azure OpenAI:</strong>
+        <p class="mb-0">@response</p>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger mt-3">
+        <strong>Felmeddelande:</strong>
+        <p class="mb-0">@error</p>
+    </div>
+}
+
+@code {
+    private string? response;
+    private string? error;
+    private bool isLoading;
+
+    private async Task TestConnection()
+    {
+        isLoading = true;
+        response = null;
+        error = null;
+
+        try
+        {
+            response = await OpenAiService.SendMessageAsync("Hej!");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

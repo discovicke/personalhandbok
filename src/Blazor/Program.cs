@@ -1,4 +1,7 @@
 using Blazor.Components;
+using Shared.Config;
+
+EnvLoader.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 

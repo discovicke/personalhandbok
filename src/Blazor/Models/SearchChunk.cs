@@ -1,5 +1,6 @@
 namespace Shared.Models;
 
+/// <summary>Textbit lagrad i sökindexet.</summary>
 public sealed record SearchChunk(
     string ChunkId,
     string DocumentId,

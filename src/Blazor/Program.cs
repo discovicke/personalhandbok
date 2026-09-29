@@ -1,4 +1,5 @@
 using Blazor.Components;
+using Blazor.Services;
 using Shared.Config;
 
 EnvLoader.Load();
@@ -8,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddSingleton<ISearchService, AzureSearchService>();
 
 var app = builder.Build();
 

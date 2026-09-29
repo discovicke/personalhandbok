@@ -1,5 +1,6 @@
 namespace Shared.Models;
 
+/// <summary>Filttyper som kan laddas upp.</summary>
 public enum DocumentType
 {
     Unknown,
@@ -9,8 +10,10 @@ public enum DocumentType
     Text
 }
 
+/// <summary>Hittar dokumenttyp från filnamn eller content type.</summary>
 public static class DocumentTypeMapper
 {
+    /// <summary>Hittar typ från filändelse, faller tillbaka på content type.</summary>
     public static DocumentType FromFileName(string fileName, string? contentType = null)
     {
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
@@ -24,6 +27,7 @@ public static class DocumentTypeMapper
         };
     }
 
+    /// <summary>Hittar typ från en MIME-sträng.</summary>
     public static DocumentType FromContentType(string? contentType) => contentType switch
     {
         "application/pdf" => DocumentType.Pdf,

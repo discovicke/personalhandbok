@@ -12,6 +12,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddSingleton<ISearchService, AzureSearchService>();
 builder.Services.AddSingleton<IOpenAiService, AzureOpenAiService>();
+builder.Services.AddSingleton<IChatService, ChatService>();
 
 var app = builder.Build();
 

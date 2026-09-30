@@ -18,15 +18,9 @@
         </p>
 
         <div class="d-flex align-items-center gap-2">
-            <InputFile
-                OnChange="OnFileChosen"
-                accept=".pdf,.docx,.doc,.md,.markdown,.txt"
-                class="form-control" />
+            <InputFile OnChange="OnFileChosen" accept=".pdf,.docx,.doc,.md,.markdown,.txt" class="form-control" />
 
-            <button
-                class="btn btn-primary"
-                @onclick="LaddaUpp"
-                disabled="@(valdFil is null || laddarUpp)">
+            <button class="btn btn-primary" @onclick="LaddaUpp" disabled="@(valdFil is null || laddarUpp)">
                 @(laddarUpp ? "Laddar upp..." : "Ladda upp")
             </button>
         </div>
@@ -61,16 +55,22 @@ else
 
         @foreach (var fil in filer)
         {
-            <div class="list-group-item">
-                <div class="fw-semibold">
-                    @fil.FileName
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-semibold">
+                        @fil.FileName
+                    </div>
+
+                    <small class="text-muted">
+                        @fil.SizeBytes bytes
+                        ·
+                        @fil.UploadedAt.LocalDateTime.ToShortDateString()
+                    </small>
                 </div>
 
-                <small class="text-muted">
-                    @fil.SizeBytes bytes
-                    ·
-                    @fil.UploadedAt.LocalDateTime.ToShortDateString()
-                </small>
+                <button class="btn btn-outline-danger btn-sm" @onclick="() => TaBort(fil.Id)">
+                    Ta bort
+                </button>
             </div>
         }
 
@@ -128,6 +128,19 @@ else
         try
         {
             filer = await Documents.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            feltext = AzureErrorHandler.UserFriendlyError(ex);
+        }
+    }
+
+    private async Task TaBort(string documentId)
+    {
+        try
+        {
+            await Documents.DeleteAsync(documentId);
+            await LäsFiler();
         }
         catch (Exception ex)
         {

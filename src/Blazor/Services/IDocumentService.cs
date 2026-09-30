@@ -10,4 +10,6 @@ public interface IDocumentService
 
     /// <summary>Listar alla uppladdade dokument.</summary>
     Task<IReadOnlyList<DocumentMetadata>> ListAsync(CancellationToken ct = default);
+
+    Task DeleteAsync(string documentId, CancellationToken ct = default);
 }

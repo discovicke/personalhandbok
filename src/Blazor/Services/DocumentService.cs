@@ -70,6 +70,17 @@ public sealed class DocumentService : IDocumentService
         return result;
     }
 
+    public async Task DeleteAsync(string documentId, CancellationToken ct = default)
+    {
+        var blob = _container.GetBlobClient(documentId);
+
+        await blob.DeleteIfExistsAsync(
+            DeleteSnapshotsOption.IncludeSnapshots,
+            cancellationToken: ct);
+
+        await RunIndexerAsync(ct);
+    }
+
     private async Task RunIndexerAsync(CancellationToken ct)
     {
         try

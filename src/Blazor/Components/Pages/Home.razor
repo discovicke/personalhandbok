@@ -1,58 +1,94 @@
 ﻿@page "/"
 @rendermode InteractiveServer
-@inject Blazor.Services.IOpenAiService OpenAiService
+@using Blazor.Services
+@using Shared.Models
+@inject IChatService ChatService
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Personalhandboksassistent</PageTitle>
 
 <h1>Kalle Anka AB - Personalhandboksassistent</h1>
+<p class="text-muted">Testa att ställa en fråga till assistenten baserat på handboken.</p>
 
-<p>Test av Azure OpenAI-koppling:</p>
+<div class="card p-3 my-3">
+    <div class="mb-3">
+        <label for="questionInput" class="form-label font-weight-bold">Din fråga:</label>
+        <div class="input-group">
+            <input id="questionInput" 
+                   class="form-control" 
+                   @bind="userQuestion" 
+                   @bind:event="oninput" 
+                   placeholder="T.ex. Vad gäller för semester? eller Hur fungerar friskvårdsbidraget?" />
+            <button class="btn btn-primary" @onclick="AskAssistant" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span>Söker och tänker...</span>
+                }
+                else
+                {
+                    <span>Fråga assistenten</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
 
-<button class="btn btn-primary" @onclick="TestConnection" disabled="@isLoading">
-    @if (isLoading)
-    {
-        <span>Skickar "Hej" till Azure OpenAI...</span>
-    }
-    else
-    {
-        <span>Skicka "Hej" till Azure OpenAI</span>
-    }
-</button>
-
-@if (!string.IsNullOrEmpty(response))
+@if (chatResponse is not null)
 {
-    <div class="alert alert-success mt-3">
-        <strong>Svar från Azure OpenAI:</strong>
-        <p class="mb-0">@response</p>
+    <div class="card border-success my-3">
+        <div class="card-header bg-success text-white">
+            <strong>Assistentens svar</strong>
+        </div>
+        <div class="card-body">
+            <p class="card-text" style="white-space: pre-wrap;">@chatResponse.Answer</p>
+
+            @if (chatResponse.Citations.Count > 0)
+            {
+                <hr />
+                <h6>Källor och referenser (@chatResponse.Citations.Count st):</h6>
+                <ul class="list-group list-group-flush">
+                    @foreach (var citation in chatResponse.Citations)
+                    {
+                        <li class="list-group-item bg-light mb-1 border rounded">
+                            <div><strong>Dokument:</strong> @citation.FileName (@citation.ChunkId)</div>
+                            <div class="text-muted small mt-1"><em>"@citation.Quote"</em></div>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
     </div>
 }
 
-@if (!string.IsNullOrEmpty(error))
+@if (!string.IsNullOrEmpty(errorMessage))
 {
     <div class="alert alert-danger mt-3">
-        <strong>Felmeddelande:</strong>
-        <p class="mb-0">@error</p>
+        <strong>Ett fel inträffade:</strong>
+        <p class="mb-0">@errorMessage</p>
     </div>
 }
 
 @code {
-    private string? response;
-    private string? error;
+    private string userQuestion = "Vad gäller för semester?";
+    private ChatResponse? chatResponse;
+    private string? errorMessage;
     private bool isLoading;
 
-    private async Task TestConnection()
+    private async Task AskAssistant()
     {
+        if (string.IsNullOrWhiteSpace(userQuestion))
+            return;
+
         isLoading = true;
-        response = null;
-        error = null;
+        errorMessage = null;
+        chatResponse = null;
 
         try
         {
-            response = await OpenAiService.SendMessageAsync("Hej!");
+            chatResponse = await ChatService.AskAsync(userQuestion);
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            errorMessage = ex.Message;
         }
         finally
         {

@@ -1,0 +1,19 @@
+.admin-header {
+    margin-bottom: 30px;
+    padding: 24px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+}
+
+.admin-header h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.admin-header p {
+    margin: 8px 0 0;
+    color: #6c757d;
+}
+

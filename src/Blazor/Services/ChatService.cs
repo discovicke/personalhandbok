@@ -69,7 +69,11 @@ public sealed class ChatService : IChatService
         var answer = await _openAiService.SendMessageAsync(prompt, ct: ct);
 
         // Om modellen avböjde (ej personalfråga eller saknas i handboken) -> IsRefused = true
-        if (answer.Contains("bara besvara frågor", StringComparison.OrdinalIgnoreCase) ||
+        // Prompten ber modellen inleda avböjda svar med "AVBÖJER:", så det är det vi måste detektera.
+        var trimmedAnswer = answer.TrimStart();
+        if (trimmedAnswer.StartsWith("AVBÖJER:", StringComparison.OrdinalIgnoreCase) ||
+            trimmedAnswer.StartsWith("AVBOJER:", StringComparison.OrdinalIgnoreCase) ||
+            answer.Contains("bara besvara frågor", StringComparison.OrdinalIgnoreCase) ||
             answer.Contains("saknas i personalhandboken", StringComparison.OrdinalIgnoreCase) ||
             answer.Contains("saknas information", StringComparison.OrdinalIgnoreCase))
         {
@@ -80,8 +84,12 @@ public sealed class ChatService : IChatService
         var citations = chunks.Select(c => new Citation(
             DocumentId: c.DocumentId,
             FileName: c.FileName,
-            Quote: c.Content.Length > 200 ? c.Content[..200] + "..." : c.Content,
-            ChunkId: c.ChunkIndex > 0 ? $"Sida {c.ChunkIndex}" : null
+            Quote: c.Content.Length > 200 
+                ? c.Content[..200] + "..." 
+                : c.Content,
+            ChunkId: c.ChunkIndex > 0 
+                ? $"Sida {c.ChunkIndex}" 
+                : null
         )).ToList();
 
         return new ChatResponse(

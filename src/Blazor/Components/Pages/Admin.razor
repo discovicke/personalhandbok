@@ -1,0 +1,102 @@
+@page "/admin"
+@rendermode InteractiveServer
+@using Blazor.Services
+@inject IDocumentService Documents
+
+<PageTitle>Admin</PageTitle>
+
+<h1>Admin – dokument</h1>
+
+<p>
+    <InputFile OnChange="OnFileChosen" accept=".pdf,.docx,.doc,.md,.markdown,.txt" />
+    <button @onclick="LaddaUpp" disabled="@(valdFil is null || laddarUpp)">Ladda upp</button>
+</p>
+
+@if (!string.IsNullOrEmpty(meddelande))
+{
+    <p>@meddelande</p>
+}
+
+@if (!string.IsNullOrEmpty(feltext))
+{
+    <p class="alert alert-warning">@feltext</p>
+}
+
+<h2>Filer</h2>
+
+@if (filer is null)
+{
+    <p>Laddar…</p>
+}
+else if (filer.Count == 0)
+{
+    <p>Inga filer ännu.</p>
+}
+else
+{
+    <ul>
+        @foreach (var fil in filer)
+        {
+            <li>@fil.FileName (@fil.SizeBytes bytes, @fil.UploadedAt.LocalDateTime.ToShortDateString())</li>
+        }
+    </ul>
+}
+
+@code {
+    private IBrowserFile? valdFil;
+    private IReadOnlyList<Shared.Models.DocumentMetadata>? filer;
+    private string? meddelande;
+    private string? feltext;
+    private bool laddarUpp;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LäsFiler();
+    }
+
+    private void OnFileChosen(InputFileChangeEventArgs e)
+    {
+        valdFil = e.File;
+        meddelande = null;
+        feltext = null;
+    }
+
+    private async Task LaddaUpp()
+    {
+        if (valdFil is null)
+            return;
+
+        laddarUpp = true;
+        meddelande = null;
+        feltext = null;
+
+        try
+        {
+            await using var stream = valdFil.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            var meta = await Documents.UploadAsync(stream, valdFil.Name, valdFil.ContentType);
+            meddelande = $"{meta.FileName} laddad upp. Den går att söka på efter en stund.";
+            valdFil = null;
+            await LäsFiler();
+        }
+        catch (Exception ex)
+        {
+            feltext = AzureErrorHandler.UserFriendlyError(ex);
+        }
+        finally
+        {
+            laddarUpp = false;
+        }
+    }
+
+    private async Task LäsFiler()
+    {
+        try
+        {
+            filer = await Documents.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            feltext = AzureErrorHandler.UserFriendlyError(ex);
+        }
+    }
+}

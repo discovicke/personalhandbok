@@ -67,7 +67,7 @@ public sealed class ChatService : IChatService
             2. Hitta INTE på information som inte finns i utdragen. Om utdragen INTE innehåller relevant information för att hjälpa medarbetaren, inled svaret med ordet "AVBÖJER:" följt av en vänlig förklaring att information saknas i personalhandboken.
             3. Besvara ENDAST personal- och arbetsrelaterade ärenden. Om frågan helt saknar koppling till arbetsplatsen eller personalfrågor (t.ex. allmänbildning, väder, matlagning eller sport), inled svaret med ordet "AVBÖJER:" följt av en vänlig förklaring att du enbart hanterar personalfrågor.
             4. Skriv svaret i ren, oformaterad text (plain text). Använd ALDRIG Markdown-formatering: inga asterisker för fetstil (**ord** eller *ord*), inga taggar (#) och inga kodblock. För punktlistor, använd vanliga bindestreck (-).
-
+            5. Svara bara med svenska tecken från alfabetet. 
             Bifogade utdrag ur personalhandboken:
             {contextBuilder}
 

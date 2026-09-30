@@ -32,6 +32,20 @@ public sealed class AzureSearchService : ISearchService
     /// <inheritdoc/>
     public async Task EnsureIndexAsync(CancellationToken ct = default)
     {
+        // Skydd: index med fältet "chunk_id" ägs av indexern (prod). Skriv aldrig över det.
+        try
+        {
+            var existing = await _indexClient.GetIndexAsync(_indexName, cancellationToken: ct);
+            if (existing.Value.Fields.Any(f => f.Name == "chunk_id"))
+                throw new InvalidOperationException(
+                    $"Indexet '{_indexName}' ägs av indexern och får inte skrivas över. " +
+                    "EnsureIndex skapar bara test-index.");
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // Finns inte, skapa nedan.
+        }
+
         var definition = new SearchIndex(_indexName)
         {
             Fields =

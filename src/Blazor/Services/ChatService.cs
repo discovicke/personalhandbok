@@ -27,8 +27,20 @@ public sealed class ChatService : IChatService
                 Citations: []);
         }
 
-        // 1. Sök relevanta textbitar i indexet
-        var chunks = await _searchService.SearchAsync(question, top: 3, ct: ct);
+        // 1. Skapa engelska sökord om frågan är på svenska 
+        var keywordPrompt = $"""
+            Skapa 2-4 engelska sökord (keywords) för att söka i en engelsk personalhandbok baserat på användarens fråga.
+            Svara ENDAST med de engelska sökorden separerade med mellanslag, absolut ingenting annat.
+
+            Fråga: {question}
+            Sökord:
+            """;
+
+        var searchKeywords = await _openAiService.SendMessageAsync(keywordPrompt, ct: ct);
+        var searchQuery = string.IsNullOrWhiteSpace(searchKeywords) ? question : searchKeywords.Trim();
+
+        // 2. Sök relevanta textbitar i indexet med sökorden
+        var chunks = await _searchService.SearchAsync(searchQuery, top: 3, ct: ct);
 
         if (chunks.Count == 0)
         {
@@ -39,7 +51,7 @@ public sealed class ChatService : IChatService
                 Citations: []);
         }
 
-        // 2. Sammanställ kontext från träffarna
+        // 3. Sammanställ kontext från träffarna
         var contextBuilder = new StringBuilder();
         foreach (var chunk in chunks)
         {
@@ -48,10 +60,11 @@ public sealed class ChatService : IChatService
             contextBuilder.AppendLine();
         }
 
-        // 3. Bygg prompt med strikta regler enligt kravspecifikationen
+        // 4. Bygg prompt med strikta regler
         var prompt = $"""
             Du är en hjälpsam personalassistent för Kalle Anka AB.
             Ditt uppdrag är att besvara medarbetares frågor om personalfrågor, förmåner och regler.
+            Svara alltid på samma språk som medarbetaren ställer frågan på (svenska om frågan är på svenska).
 
             Viktiga regler som du MÅSTE följa:
             1. Basera ditt svar ENBART på informationen i de bifogade utdragen nedan.
@@ -67,10 +80,10 @@ public sealed class ChatService : IChatService
             Svar:
             """;
 
-        // 4. Ställ frågan till OpenAI
+        // 5. Ställ frågan till OpenAI
         var answer = await _openAiService.SendMessageAsync(prompt, ct: ct);
 
-        // 5. Skapa källhänvisningar (Citations) från de använda textbitarna
+        // 6. Skapa källhänvisningar (Citations)
         var citations = chunks.Select(c => new Citation(
             DocumentId: c.DocumentId,
             FileName: c.FileName,

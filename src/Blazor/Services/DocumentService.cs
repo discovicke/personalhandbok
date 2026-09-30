@@ -70,15 +70,22 @@ public sealed class DocumentService : IDocumentService
         return result;
     }
 
+    /// <inheritdoc/>
+    public async Task DeleteAsync(string documentId, CancellationToken ct = default)
+    {
+        await _container.GetBlobClient(documentId).DeleteIfExistsAsync(cancellationToken: ct);
+        await RunIndexerAsync(ct);
+    }
+
     private async Task RunIndexerAsync(CancellationToken ct)
     {
         try
         {
             await _indexerClient.RunIndexerAsync(_indexerName, cancellationToken: ct);
         }
-        catch (RequestFailedException ex) when (ex.Status == 409)
+        catch (RequestFailedException ex) when (ex.Status is 409 or 429)
         {
-            // Indexern kör redan, allt bra.
+            // 409: indexern kör redan. 429: nyss startad (min 180 s mellan körningar). Båda OK.
         }
     }
 }

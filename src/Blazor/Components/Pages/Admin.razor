@@ -173,17 +173,4 @@ else
             feltext = AzureErrorHandler.UserFriendlyError(ex);
         }
     }
-
-    private async Task TaBort(string documentId)
-    {
-        try
-        {
-            await Documents.DeleteAsync(documentId);
-            await LäsFiler();
-        }
-        catch (Exception ex)
-        {
-            feltext = AzureErrorHandler.UserFriendlyError(ex);
-        }
-    }
 }

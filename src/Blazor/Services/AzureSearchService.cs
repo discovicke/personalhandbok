@@ -32,7 +32,20 @@ public sealed class AzureSearchService : ISearchService
     /// <summary>Skapar/uppdaterar sökindexet. Fast form varje gång: ChunkId, DocumentId, FileName, Content, ChunkIndex.</summary>
     public async Task EnsureIndexAsync(CancellationToken ct = default)
     {
-        // Enda sanningen för schemat — ändra ej ordning/typer utan migration. CreateOrUpdate = idempotent.
+        // Skydd: index med fältet "chunk_id" ägs av indexern (prod). Skriv aldrig över det.
+        try
+        {
+            var existing = await _indexClient.GetIndexAsync(_indexName, cancellationToken: ct);
+            if (existing.Value.Fields.Any(f => f.Name == "chunk_id"))
+                throw new InvalidOperationException(
+                    $"Indexet '{_indexName}' ägs av indexern och får inte skrivas över. " +
+                    "EnsureIndex skapar bara test-index.");
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // Finns inte, skapa nedan.
+        }
+
         var definition = new SearchIndex(_indexName)
         {
             Fields =

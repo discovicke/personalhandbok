@@ -1,7 +1,9 @@
 @page "/admin"
 @rendermode InteractiveServer
 @using Blazor.Services
+@using Microsoft.JSInterop
 @inject IDocumentService Documents
+@inject IJSRuntime JS
 
 <PageTitle>Admin</PageTitle>
 
@@ -107,9 +109,20 @@ else
 
         try
         {
+            if (filer is not null && filer.Any(f => f.Id == valdFil.Name) &&
+                !await JS.InvokeAsync<bool>("confirm", $"Filen {valdFil.Name} finns redan. Ersätta den?"))
+                return;
+
             await using var stream = valdFil.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
             var meta = await Documents.UploadAsync(stream, valdFil.Name, valdFil.ContentType);
             meddelande = $"{meta.FileName} laddad upp. Den går att söka på efter en stund.";
+            valdFil = null;
+            await LäsFiler();
+        }
+        catch (IndexerTriggerException)
+        {
+            // Filen är uppe, bara indexeringen som dröjer. Info, inte fel.
+            meddelande = AzureErrorHandler.IndexerDelayed;
             valdFil = null;
             await LäsFiler();
         }
@@ -120,6 +133,32 @@ else
         finally
         {
             laddarUpp = false;
+        }
+    }
+
+    private async Task TaBort(string documentId)
+    {
+        meddelande = null;
+        feltext = null;
+
+        if (!await JS.InvokeAsync<bool>("confirm", $"Ta bort {documentId}?"))
+            return;
+
+        try
+        {
+            await Documents.DeleteAsync(documentId);
+            meddelande = $"{documentId} borttagen. Den försvinner från sök inom kort.";
+            await LäsFiler();
+        }
+        catch (IndexerTriggerException)
+        {
+            // Filen är borta, bara indexeringen som dröjer. Info, inte fel.
+            meddelande = $"{documentId} borttagen. Den försvinner från sök inom kort.";
+            await LäsFiler();
+        }
+        catch (Exception ex)
+        {
+            feltext = AzureErrorHandler.UserFriendlyError(ex);
         }
     }
 

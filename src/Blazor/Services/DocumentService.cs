@@ -12,11 +12,13 @@ public sealed class DocumentService : IDocumentService
 {
     private readonly BlobContainerClient _container;
     private readonly SearchIndexerClient _indexerClient;
+    private readonly ISearchService _searchService;
     private readonly string _indexerName;
 
     /// <summary>Kopplar upp med BLOB_STORAGE_CONNECTION_STRING, BLOB_CONTAINER_NAME och BLOB_INDEXER_NAME.</summary>
-    public DocumentService()
+    public DocumentService(ISearchService searchService)
     {
+        _searchService = searchService;
         var connectionString = EnvLoader.GetRequired("BLOB_STORAGE_CONNECTION_STRING");
         var containerName = EnvLoader.GetRequired("BLOB_CONTAINER_NAME");
         _indexerName = EnvLoader.GetRequired("BLOB_INDEXER_NAME");
@@ -70,14 +72,12 @@ public sealed class DocumentService : IDocumentService
         return result;
     }
 
+    /// <inheritdoc/>
     public async Task DeleteAsync(string documentId, CancellationToken ct = default)
     {
-        var blob = _container.GetBlobClient(documentId);
-
-        await blob.DeleteIfExistsAsync(
-            DeleteSnapshotsOption.IncludeSnapshots,
-            cancellationToken: ct);
-
+        await _container.GetBlobClient(documentId).DeleteIfExistsAsync(cancellationToken: ct);
+        // Indexern städar inte alltid bort raderat själv. Radera chunkarna explicit också.
+        await _searchService.DeleteByFileNameAsync(documentId, ct);
         await RunIndexerAsync(ct);
     }
 
@@ -87,9 +87,14 @@ public sealed class DocumentService : IDocumentService
         {
             await _indexerClient.RunIndexerAsync(_indexerName, cancellationToken: ct);
         }
-        catch (RequestFailedException ex) when (ex.Status == 409)
+        catch (RequestFailedException ex) when (ex.Status is 409 or 429)
         {
-            // Indexern kör redan, allt bra.
+            // 409: indexern kör redan. 429: nyss startad (min 180 s mellan körningar). Båda OK.
+        }
+        catch (Exception ex)
+        {
+            // Filen är redan uppladdad/raderad här. Meddela att sökningen dröjer i stället för kraschtext.
+            throw new IndexerTriggerException("Kunde inte starta indexern.", ex);
         }
     }
 }

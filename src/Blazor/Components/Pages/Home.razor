@@ -13,10 +13,7 @@
     <div class="mb-3">
         <label for="questionInput" class="form-label font-weight-bold">Din fråga:</label>
         <div class="input-group">
-            <input id="questionInput" 
-                   class="form-control" 
-                   @bind="userQuestion" 
-                   @bind:event="oninput" 
+            <input id="questionInput" class="form-control" @bind="userQuestion" @bind:event="oninput"
                    placeholder="T.ex. Vad gäller för semester? eller Hur fungerar friskvårdsbidraget?" />
             <button class="btn btn-primary" @onclick="AskAssistant" disabled="@isLoading">
                 @if (isLoading)
@@ -39,9 +36,24 @@
             <strong>Assistentens svar</strong>
         </div>
         <div class="card-body">
-            <p class="card-text" style="white-space: pre-wrap;">@chatResponse.Answer</p>
+            @if (chatResponse.IsRefused)
+            {
+                @* Nej-svar: rött kort i samma form som svarskortet. Inga källor visas. *@
+                <div class="card border-danger my-3">
+                    <div class="card-header bg-danger text-white">
+                        <strong>Assistenten kan inte svara</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text mb-0">@GetDisplayRefusal()</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="card-text" style="white-space: pre-wrap;">@chatResponse.Answer</p>
+            }
 
-            @if (chatResponse.Citations.Count > 0)
+            @if (!chatResponse.IsRefused && chatResponse.Citations.Count > 0)
             {
                 <hr />
                 <h6>Källor och referenser (@chatResponse.Citations.Count st):</h6>
@@ -94,5 +106,16 @@
         {
             isLoading = false;
         }
+    }
+
+    private string GetDisplayRefusal()
+    {
+        var reason = chatResponse?.RefusalReason?.TrimStart() ?? string.Empty;
+        foreach (var prefix in new[] { "AVBÖJER:", "AVBOJER:" })
+        {
+            if (reason.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return reason[prefix.Length..].TrimStart();
+        }
+        return reason;
     }
 }

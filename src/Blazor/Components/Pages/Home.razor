@@ -31,44 +31,44 @@
 
 @if (chatResponse is not null)
 {
-    <div class="card border-success my-3">
-        <div class="card-header bg-success text-white">
-            <strong>Assistentens svar</strong>
+    @if (chatResponse.IsRefused)
+    {
+        @* Nej-svar: rött kort i samma form som svarskortet. Inga källor visas. *@
+        <div class="card border-danger my-3">
+            <div class="card-header bg-danger text-white">
+                <strong>Assistenten kan inte svara</strong>
+            </div>
+            <div class="card-body">
+                <p class="card-text mb-0">@chatResponse.RefusalReason</p>
+            </div>
         </div>
-        <div class="card-body">
-            @if (chatResponse.IsRefused)
-            {
-                @* Nej-svar: rött kort i samma form som svarskortet. Inga källor visas. *@
-                <div class="card border-danger my-3">
-                    <div class="card-header bg-danger text-white">
-                        <strong>Assistenten kan inte svara</strong>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-text mb-0">@GetDisplayRefusal()</p>
-                    </div>
-                </div>
-            }
-            else
-            {
+    }
+    else
+    {
+        <div class="card border-success my-3">
+            <div class="card-header bg-success text-white">
+                <strong>Assistentens svar</strong>
+            </div>
+            <div class="card-body">
                 <p class="card-text" style="white-space: pre-wrap;">@chatResponse.Answer</p>
-            }
 
-            @if (!chatResponse.IsRefused && chatResponse.Citations.Count > 0)
-            {
-                <hr />
-                <h6>Källor och referenser (@chatResponse.Citations.Count st):</h6>
-                <ul class="list-group list-group-flush">
-                    @foreach (var citation in chatResponse.Citations)
-                    {
-                        <li class="list-group-item bg-light mb-1 border rounded">
-                            <div><strong>Dokument:</strong> @citation.FileName (@citation.ChunkId)</div>
-                            <div class="text-muted small mt-1"><em>"@citation.Quote"</em></div>
-                        </li>
-                    }
-                </ul>
-            }
+                @if (!chatResponse.IsRefused && chatResponse.Citations.Count > 0)
+                {
+                    <hr />
+                    <h6>Källor och referenser (@chatResponse.Citations.Count st):</h6>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var citation in chatResponse.Citations)
+                        {
+                            <li class="list-group-item bg-light mb-1 border rounded">
+                                <div><strong>Dokument:</strong> @citation.FileName (@citation.ChunkId)</div>
+                                <div class="text-muted small mt-1"><em>"@citation.Quote"</em></div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
         </div>
-    </div>
+    }
 }
 
 @if (!string.IsNullOrEmpty(errorMessage))

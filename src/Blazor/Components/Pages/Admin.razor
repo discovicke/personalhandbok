@@ -7,12 +7,27 @@
 
 <PageTitle>Admin</PageTitle>
 
-<h1>Admin – dokument</h1>
+<div class="admin-header">
+    <h1>Dokument</h1>
+    <p>Hantera dokument som används av personalhandboksassistenten.</p>
+</div>
 
-<p>
-    <InputFile OnChange="OnFileChosen" accept=".pdf,.docx,.doc,.md,.markdown,.txt" />
-    <button @onclick="LaddaUpp" disabled="@(valdFil is null || laddarUpp)">Ladda upp</button>
-</p>
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Ladda upp dokument</h5>
+        <p class="card-text text-muted">
+            Välj ett dokument att lägga till i personalhandboken.
+        </p>
+
+        <div class="d-flex align-items-center gap-2">
+            <InputFile OnChange="OnFileChosen" accept=".pdf,.docx,.doc,.md,.markdown,.txt" class="form-control" />
+
+            <button class="btn btn-primary" @onclick="LaddaUpp" disabled="@(valdFil is null || laddarUpp)">
+                @(laddarUpp ? "Laddar upp..." : "Ladda upp")
+            </button>
+        </div>
+    </div>
+</div>
 
 @if (!string.IsNullOrEmpty(meddelande))
 {
@@ -24,27 +39,44 @@
     <p class="alert alert-warning">@feltext</p>
 }
 
-<h2>Filer</h2>
+<h2 class="mb-3">Filer</h2>
 
 @if (filer is null)
 {
-    <p>Laddar…</p>
+    <p class="text-muted">Laddar...</p>
 }
 else if (filer.Count == 0)
 {
-    <p>Inga filer ännu.</p>
+    <div class="alert alert-light border">
+        Inga filer ännu.
+    </div>
 }
 else
 {
-    <ul>
+    <div class="list-group mb-4">
+
         @foreach (var fil in filer)
         {
-            <li>
-                @fil.FileName (@fil.SizeBytes bytes, @fil.UploadedAt.LocalDateTime.ToShortDateString())
-                <button @onclick="() => TaBort(fil.Id)">Ta bort</button>
-            </li>
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-semibold">
+                        @fil.FileName
+                    </div>
+
+                    <small class="text-muted">
+                        @fil.SizeBytes bytes
+                        ·
+                        @fil.UploadedAt.LocalDateTime.ToShortDateString()
+                    </small>
+                </div>
+
+                <button class="btn btn-outline-danger btn-sm" @onclick="() => TaBort(fil.Id)">
+                    Ta bort
+                </button>
+            </div>
         }
-    </ul>
+
+    </div>
 }
 
 @code {

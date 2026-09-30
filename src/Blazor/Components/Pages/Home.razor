@@ -13,10 +13,7 @@
     <div class="mb-3">
         <label for="questionInput" class="form-label font-weight-bold">Din fråga:</label>
         <div class="input-group">
-            <input id="questionInput" 
-                   class="form-control" 
-                   @bind="userQuestion" 
-                   @bind:event="oninput" 
+            <input id="questionInput" class="form-control" @bind="userQuestion" @bind:event="oninput"
                    placeholder="T.ex. Vad gäller för semester? eller Hur fungerar friskvårdsbidraget?" />
             <button class="btn btn-primary" @onclick="AskAssistant" disabled="@isLoading">
                 @if (isLoading)
@@ -39,7 +36,16 @@
             <strong>Assistentens svar</strong>
         </div>
         <div class="card-body">
-            <p class="card-text" style="white-space: pre-wrap;">@chatResponse.Answer</p>
+            @if (chatResponse.IsRefused)
+            {
+                <div class="alert alert-warning mb-0">
+                    <strong>Assistenten avböjde:</strong> @chatResponse.RefusalReason
+                </div>
+            }
+            else
+            {
+                <p class="card-text" style="white-space: pre-wrap;">@chatResponse.Answer</p>
+            }
 
             @if (chatResponse.Citations.Count > 0)
             {

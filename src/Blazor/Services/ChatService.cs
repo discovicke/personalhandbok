@@ -3,7 +3,7 @@ using Shared.Models;
 
 namespace Blazor.Services;
 
-/// <summary>RAG-chattjänst som kombinerar Azure AI Search med Azure OpenAI.</summary>
+/// <summary>RAG-chattjänst som kombinerar Azure AI Search med Azure OpenAI och hanterar avböjande svar.</summary>
 public sealed class ChatService : IChatService
 {
     private readonly ISearchService _searchService;
@@ -20,16 +20,13 @@ public sealed class ChatService : IChatService
     {
         if (string.IsNullOrWhiteSpace(question))
         {
-            return new ChatResponse(
-                Answer: "Ställ en fråga för att få ett svar.",
-                IsRefused: false,
-                RefusalReason: null,
-                Citations: []);
+            return ChatResponse.Refused("Ställ en fråga för att få ett svar.");
         }
 
-        // 1. Skapa engelska sökord om frågan är på svenska 
+        // 1. Skapa engelska sökord om frågan är på svenska
         var keywordPrompt = $"""
-            Skapa 2-4 engelska sökord (keywords) för att söka i en engelsk personalhandbok baserat på användarens fråga.
+             Analysera användarens fråga eller uttryck och identifiera det underliggande personal-, arbetsmiljö- eller HR-relaterade ämnet (även om uttrycket är kort, vardagligt eller implicit).
+            Skapa 2-4 relevanta engelska sökord som bäst matchar hur detta ämne beskrivs i en professionell personalhandbok.
             Svara ENDAST med de engelska sökorden separerade med mellanslag, absolut ingenting annat.
 
             Fråga: {question}
@@ -42,13 +39,10 @@ public sealed class ChatService : IChatService
         // 2. Sök relevanta textbitar i indexet med sökorden
         var chunks = await _searchService.SearchAsync(searchQuery, top: 3, ct: ct);
 
+        // Inget hittades i sökindexet -> IsRefused = true
         if (chunks.Count == 0)
         {
-            return new ChatResponse(
-                Answer: "Jag hittade tyvärr ingen information om detta i personalhandboken.",
-                IsRefused: false,
-                RefusalReason: null,
-                Citations: []);
+            return ChatResponse.Refused("Jag hittade tyvärr ingen information om detta i personalhandboken.");
         }
 
         // 3. Sammanställ kontext från träffarna
@@ -60,26 +54,39 @@ public sealed class ChatService : IChatService
             contextBuilder.AppendLine();
         }
 
-        // 4. Bygg prompt med strikta regler
+        // 4. Bygg prompten 
         var prompt = $"""
             Du är en hjälpsam personalassistent för Kalle Anka AB.
-            Ditt uppdrag är att besvara medarbetares frågor om personalfrågor, förmåner och regler.
+            Ditt uppdrag är att vägleda medarbetare i frågor om personal, anställningsvillkor, förmåner, arbetsmiljö och säkerhet.
             Svara alltid på samma språk som medarbetaren ställer frågan på (svenska om frågan är på svenska).
-            
+            Förståelse och bemötande:
+            - Tolka användarens avsikt välvilligt: även korta, vardagliga eller implicita uttryck (t.ex. uttryck för smärta, oro, hälsa eller missnöje) ska kopplas till relevanta rutiner och riktlinjer i handboken.
+            - Ge ett empatiskt, tydligt och praktiskt råd utifrån handbokens rutiner om informationen finns i utdragen.
             Viktiga regler som du MÅSTE följa:
             1. Basera ditt svar ENBART på informationen i de bifogade utdragen nedan.
-            2. Hitta INTE på information som inte finns i utdragen. Om informationen inte räcker, svara att det saknas i personalhandboken.
-            3. Besvara ENDAST personal- och arbetsrelaterade frågor. Om användaren frågar om något helt annat (t.ex. programmering, allmänbildning eller väder), avböj vänligt och förklara att du bara besvarar frågor gällande personalhandboken.
-            4. Skriv svaret i ren, oformaterad text (plain text). Använd ALDRIG Markdown-formatering: inga asterisker för fetstil (**ord** eller *ord*), inga taggar (#) och inga kodblock. Om du behöver punktlistor, använd enbart vanliga bindestreck (-) eller siffror (1, 2, 3).
+            2. Hitta INTE på information som inte finns i utdragen. Om utdragen INTE innehåller relevant information för att hjälpa medarbetaren, inled svaret med ordet "AVBÖJER:" följt av en vänlig förklaring att information saknas i personalhandboken.
+            3. Besvara ENDAST personal- och arbetsrelaterade ärenden. Om frågan helt saknar koppling till arbetsplatsen eller personalfrågor (t.ex. allmänbildning, väder, matlagning eller sport), inled svaret med ordet "AVBÖJER:" följt av en vänlig förklaring att du enbart hanterar personalfrågor.
+            4. Skriv svaret i ren, oformaterad text (plain text). Använd ALDRIG Markdown-formatering: inga asterisker för fetstil (**ord** eller *ord*), inga taggar (#) och inga kodblock. För punktlistor, använd vanliga bindestreck (-).
+
             Bifogade utdrag ur personalhandboken:
             {contextBuilder}
+
             Fråga från medarbetare:
             {question}
+
             Svar:
             """;
 
         // 5. Ställ frågan till OpenAI
         var answer = await _openAiService.SendMessageAsync(prompt, ct: ct);
+
+        // Om modellen avböjde (ej personalfråga eller saknas i handboken) -> IsRefused = true
+        if (answer.Contains("bara besvara frågor", StringComparison.OrdinalIgnoreCase) ||
+            answer.Contains("saknas i personalhandboken", StringComparison.OrdinalIgnoreCase) ||
+            answer.Contains("saknas information", StringComparison.OrdinalIgnoreCase))
+        {
+            return ChatResponse.Refused(answer);
+        }
 
         // 6. Skapa källhänvisningar (Citations)
         var citations = chunks.Select(c => new Citation(

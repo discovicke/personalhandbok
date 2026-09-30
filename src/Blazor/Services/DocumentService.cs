@@ -87,5 +87,10 @@ public sealed class DocumentService : IDocumentService
         {
             // 409: indexern kör redan. 429: nyss startad (min 180 s mellan körningar). Båda OK.
         }
+        catch (Exception ex)
+        {
+            // Filen är redan uppladdad/raderad här. Meddela att sökningen dröjer i stället för kraschtext.
+            throw new IndexerTriggerException("Kunde inte starta indexern.", ex);
+        }
     }
 }

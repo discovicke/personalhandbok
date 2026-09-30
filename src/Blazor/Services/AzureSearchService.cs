@@ -84,7 +84,8 @@ public sealed class AzureSearchService : ISearchService
     /// <inheritdoc/>
     public async Task<IReadOnlyList<SearchChunk>> SearchAsync(string query, int top = 5, CancellationToken ct = default)
     {
-        // Fält i det riktiga indexet: chunk_id (nyckel, slutar med _pages_N), parent_id, chunk, title.
+        // Fält i det riktiga indexet: chunk_id (nyckel, slutar med _pages_N), parent_id, chunk, title, text_vector.
+        // Hybrid: textfråga + vektorfråga i samma anrop. Azure vektoriserar frågetexten själv.
         var options = new SearchOptions { Size = top };
 
         if (!string.IsNullOrWhiteSpace(_semanticConfig))
@@ -92,6 +93,18 @@ public sealed class AzureSearchService : ISearchService
             options.QueryType = SearchQueryType.Semantic;
             options.SemanticSearch = new SemanticSearchOptions { SemanticConfigurationName = _semanticConfig };
         }
+
+        options.VectorSearch = new VectorSearchOptions
+        {
+            Queries =
+            {
+                new VectorizableTextQuery(query)
+                {
+                    KNearestNeighborsCount = top,
+                    Fields = { "text_vector" }
+                }
+            }
+        };
 
         var response = await _searchClient.SearchAsync<SearchDocument>(query, options, ct);
 
@@ -109,6 +122,22 @@ public sealed class AzureSearchService : ISearchService
         }
 
         return hits;
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> DeleteByFileNameAsync(string fileName, CancellationToken ct = default)
+    {
+        var keys = (await SearchAsync(fileName, top: 1000, ct))
+            .Where(h => h.FileName.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+            .Select(h => h.ChunkId)
+            .Where(id => id.Length > 0)
+            .ToList();
+
+        if (keys.Count == 0)
+            return 0;
+
+        await _searchClient.DeleteDocumentsAsync("chunk_id", keys, cancellationToken: ct);
+        return keys.Count;
     }
 
     private static string GetString(SearchDocument doc, string field) =>

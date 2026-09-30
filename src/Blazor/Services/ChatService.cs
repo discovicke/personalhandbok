@@ -23,21 +23,9 @@ public sealed class ChatService : IChatService
             return ChatResponse.Refused("Ställ en fråga för att få ett svar.");
         }
 
-        // 1. Skapa engelska sökord om frågan är på svenska
-        var keywordPrompt = $"""
-             Analysera användarens fråga eller uttryck och identifiera det underliggande personal-, arbetsmiljö- eller HR-relaterade ämnet (även om uttrycket är kort, vardagligt eller implicit).
-            Skapa 2-4 relevanta engelska sökord som bäst matchar hur detta ämne beskrivs i en professionell personalhandbok.
-            Svara ENDAST med de engelska sökorden separerade med mellanslag, absolut ingenting annat.
-
-            Fråga: {question}
-            Sökord:
-            """;
-
-        var searchKeywords = await _openAiService.SendMessageAsync(keywordPrompt, ct: ct);
-        var searchQuery = string.IsNullOrWhiteSpace(searchKeywords) ? question : searchKeywords.Trim();
-
-        // 2. Sök relevanta textbitar i indexet med sökorden
-        var chunks = await _searchService.SearchAsync(searchQuery, top: 3, ct: ct);
+        // 1. Sök direkt på frågan. Hybridsökningen (text + vektor) förstår svenska frågor
+        // mot engelskt innehåll utan översättning. LLM behövs inte före sökningen.
+        var chunks = await _searchService.SearchAsync(question, top: 3, ct: ct);
 
         // Inget hittades i sökindexet -> IsRefused = true
         if (chunks.Count == 0)

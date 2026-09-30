@@ -12,11 +12,13 @@ public sealed class DocumentService : IDocumentService
 {
     private readonly BlobContainerClient _container;
     private readonly SearchIndexerClient _indexerClient;
+    private readonly ISearchService _searchService;
     private readonly string _indexerName;
 
     /// <summary>Kopplar upp med BLOB_STORAGE_CONNECTION_STRING, BLOB_CONTAINER_NAME och BLOB_INDEXER_NAME.</summary>
-    public DocumentService()
+    public DocumentService(ISearchService searchService)
     {
+        _searchService = searchService;
         var connectionString = EnvLoader.GetRequired("BLOB_STORAGE_CONNECTION_STRING");
         var containerName = EnvLoader.GetRequired("BLOB_CONTAINER_NAME");
         _indexerName = EnvLoader.GetRequired("BLOB_INDEXER_NAME");
@@ -74,6 +76,8 @@ public sealed class DocumentService : IDocumentService
     public async Task DeleteAsync(string documentId, CancellationToken ct = default)
     {
         await _container.GetBlobClient(documentId).DeleteIfExistsAsync(cancellationToken: ct);
+        // Indexern städar inte alltid bort raderat själv. Radera chunkarna explicit också.
+        await _searchService.DeleteByFileNameAsync(documentId, ct);
         await RunIndexerAsync(ct);
     }
 

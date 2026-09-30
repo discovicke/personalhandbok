@@ -11,4 +11,7 @@ public interface ISearchService
     Task IndexAsync(IReadOnlyList<SearchChunk> chunks, CancellationToken ct = default);
     /// <summary>Fulltextsökning, mest relevanta träffarna först.</summary>
     Task<IReadOnlyList<SearchChunk>> SearchAsync(string query, int top = 5, CancellationToken ct = default);
+
+    /// <summary>Tar bort alla chunkar för ett filnamn direkt ur indexet. Returnerar antal borttagna.</summary>
+    Task<int> DeleteByFileNameAsync(string fileName, CancellationToken ct = default);
 }

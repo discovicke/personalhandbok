@@ -2,9 +2,13 @@ namespace Blazor.Services;
 
 public class AzureErrorHandler
 {
+    /// <summary>Visas när filen är uppe men indexeringen dröjer. Info, inte fel.</summary>
+    public const string IndexerDelayed = "Uppladdad, men indexeringen dröjer. Filen går att söka på inom kort.";
+
     /// <summary> En användarvänligare errorkod. Om du vill se hela exception, logga den separat. </summary>
     public static string UserFriendlyError(Exception exception) => exception switch
     {
+        IndexerTriggerException => IndexerDelayed,
         NotSupportedException => "Filtypen stöds inte. Bara PDF, Word, Markdown och text.",
         Azure.RequestFailedException e when e.Status == 404
             => "Hittade inte lagringen. Kolla BLOB_* i din .env.",

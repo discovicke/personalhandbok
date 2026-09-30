@@ -65,18 +65,16 @@ public sealed class ChatService : IChatService
             Du är en hjälpsam personalassistent för Kalle Anka AB.
             Ditt uppdrag är att besvara medarbetares frågor om personalfrågor, förmåner och regler.
             Svara alltid på samma språk som medarbetaren ställer frågan på (svenska om frågan är på svenska).
-
+            
             Viktiga regler som du MÅSTE följa:
             1. Basera ditt svar ENBART på informationen i de bifogade utdragen nedan.
             2. Hitta INTE på information som inte finns i utdragen. Om informationen inte räcker, svara att det saknas i personalhandboken.
             3. Besvara ENDAST personal- och arbetsrelaterade frågor. Om användaren frågar om något helt annat (t.ex. programmering, allmänbildning eller väder), avböj vänligt och förklara att du bara besvarar frågor gällande personalhandboken.
-
+            4. Skriv svaret i ren, oformaterad text (plain text). Använd ALDRIG Markdown-formatering: inga asterisker för fetstil (**ord** eller *ord*), inga taggar (#) och inga kodblock. Om du behöver punktlistor, använd enbart vanliga bindestreck (-) eller siffror (1, 2, 3).
             Bifogade utdrag ur personalhandboken:
             {contextBuilder}
-
             Fråga från medarbetare:
             {question}
-
             Svar:
             """;
 
@@ -88,7 +86,7 @@ public sealed class ChatService : IChatService
             DocumentId: c.DocumentId,
             FileName: c.FileName,
             Quote: c.Content.Length > 200 ? c.Content[..200] + "..." : c.Content,
-            ChunkId: c.ChunkId
+            ChunkId: c.ChunkIndex > 0 ? $"Sida {c.ChunkIndex}" : null
         )).ToList();
 
         return new ChatResponse(

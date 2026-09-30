@@ -49,7 +49,7 @@
                     @foreach (var citation in chatResponse.Citations)
                     {
                         <li class="list-group-item bg-light mb-1 border rounded">
-                            <div><strong>Dokument:</strong> @citation.FileName (ID: @citation.ChunkId)</div>
+                            <div><strong>Dokument:</strong> @citation.FileName (@citation.ChunkId)</div>
                             <div class="text-muted small mt-1"><em>"@citation.Quote"</em></div>
                         </li>
                     }

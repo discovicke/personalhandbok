@@ -29,7 +29,7 @@ public sealed class AzureSearchService : ISearchService
         _indexClient = new SearchIndexClient(new Uri(endpoint), credential);
     }
 
-    /// <inheritdoc/>
+    /// <summary>Skapar/uppdaterar sökindexet. Fast form varje gång: ChunkId, DocumentId, FileName, Content, ChunkIndex.</summary>
     public async Task EnsureIndexAsync(CancellationToken ct = default)
     {
         // Skydd: index med fältet "chunk_id" ägs av indexern (prod). Skriv aldrig över det.
@@ -50,10 +50,14 @@ public sealed class AzureSearchService : ISearchService
         {
             Fields =
             {
+                // Nyckel — unik per chunk, krävs av Azure Search.
                 new SimpleField("ChunkId", SearchFieldDataType.String) { IsKey = true },
-                new SearchableField("Content"),
-                new SearchableField("FileName"),
+                // Filter för ersätta/ta bort per dokument.
                 new SimpleField("DocumentId", SearchFieldDataType.String) { IsFilterable = true },
+                // Sökbart filnamn + innehåll för personalfrågor.
+                new SearchableField("FileName"),
+                new SearchableField("Content"),
+                // Ordning inom dokument — filtrerbar + sorterbar för återställd läsordning.
                 new SimpleField("ChunkIndex", SearchFieldDataType.Int32) { IsFilterable = true, IsSortable = true },
             }
         };

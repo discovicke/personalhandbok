@@ -1,7 +1,8 @@
 using System.ClientModel;
 using OpenAI;
 using OpenAI.Chat;
-using Shared.Config;
+using Blazor.Config;
+using Blazor.Services.Interfaces;
 
 namespace Blazor.Services;
 

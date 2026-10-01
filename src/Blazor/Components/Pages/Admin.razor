@@ -1,6 +1,8 @@
 @page "/admin"
 @rendermode InteractiveServer
+@using Blazor.Models
 @using Blazor.Services
+@using Blazor.Services.Interfaces
 @using Microsoft.JSInterop
 @inject IDocumentService Documents
 @inject IJSRuntime JS
@@ -81,7 +83,7 @@ else
 
 @code {
     private IBrowserFile? valdFil;
-    private IReadOnlyList<Shared.Models.DocumentMetadata>? filer;
+    private IReadOnlyList<DocumentMetadata>? filer;
     private string? meddelande;
     private string? feltext;
     private bool laddarUpp;

@@ -1,6 +1,6 @@
-using Shared.Models;
+using Blazor.Models;
 
-namespace Blazor.Services;
+namespace Blazor.Services.Interfaces;
 
 /// <summary>Laddar upp och listar dokument. Indexeringen sköter Azure själv.</summary>
 public interface IDocumentService

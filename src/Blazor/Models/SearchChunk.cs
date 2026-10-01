@@ -1,4 +1,4 @@
-namespace Shared.Models;
+namespace Blazor.Models;
 
 /// <summary>Textbit lagrad i sökindexet.</summary>
 public sealed record SearchChunk(

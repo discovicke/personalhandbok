@@ -1,4 +1,4 @@
-namespace Shared.Models;
+namespace Blazor.Models;
 
 /// <summary>Ett meddelande i en konversation. Reserverat för följdfrågor (används ej i MVP).</summary>
 public sealed record ChatMessage(string Role, string Content)

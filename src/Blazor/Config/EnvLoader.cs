@@ -1,4 +1,4 @@
-namespace Shared.Config;
+namespace Blazor.Config;
 
 public static class EnvLoader
 {

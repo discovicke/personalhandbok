@@ -1,4 +1,4 @@
-namespace Shared.Models;
+namespace Blazor.Models;
 
 /// <summary>Filttyper som kan laddas upp.</summary>
 public enum DocumentType

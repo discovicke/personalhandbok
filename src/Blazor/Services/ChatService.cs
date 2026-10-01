@@ -18,15 +18,17 @@ public sealed class ChatService : IChatService
     }
 
     /// <inheritdoc/>
-    public async Task<ChatResponse> AskAsync(string question, CancellationToken ct = default)
+    public async Task<ChatResponse> AskAsync(
+        string question, 
+        IReadOnlyList<ChatMessage>? history = null, 
+        CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(question))
         {
             return ChatResponse.Refused("Ställ en fråga för att få ett svar.");
         }
 
-        // 1. Sök direkt på frågan. Hybridsökningen (text + vektor) förstår svenska frågor
-        // mot engelskt innehåll utan översättning. LLM behövs inte före sökningen.
+        // 1. Sök relevanta textbitar i indexet med hybridsökning
         var chunks = await _searchService.SearchAsync(question, top: 5, ct: ct);
 
         // Inget hittades i sökindexet -> IsRefused = true
@@ -35,19 +37,19 @@ public sealed class ChatService : IChatService
             return ChatResponse.Refused("Jag hittade tyvärr ingen information om detta i personalhandboken.");
         }
 
-        // 3. Sammanställ kontext från träffarna
+        // 2. Sammanställ kontext från träffarna
         var context = BuildContext(chunks);
 
-        // 4. Bygg prompten
-        var prompt = BuildPrompt(question, context);
+        // 3. Bygg prompten med historik
+        var prompt = BuildPrompt(question, context, history);
 
-        // 5. Ställ frågan till OpenAI
+        // 4. Ställ frågan till OpenAI
         var answer = await _openAiService.SendMessageAsync(prompt, ct: ct);
 
-        // Om modellen avböjde (ej personalfråga eller saknas i handboken) -> IsRefused = true
+        // 5. Om modellen avböjde -> IsRefused = true med rensad text
         if (IsRefusalAnswer(answer))
         {
-            return ChatResponse.Refused(answer);
+            return ChatResponse.Refused(ChatStreamHelper.TrimRefusalPrefix(answer));
         }
 
         // 6. Skapa källhänvisningar (Citations)
@@ -59,8 +61,15 @@ public sealed class ChatService : IChatService
     }
 
     /// <inheritdoc/>
+    public IAsyncEnumerable<ChatStreamUpdate> AskStreamingAsync(
+        string question,
+        CancellationToken ct = default) =>
+        AskStreamingAsync(question, null, ct);
+
+    /// <inheritdoc/>
     public async IAsyncEnumerable<ChatStreamUpdate> AskStreamingAsync(
         string question,
+        IReadOnlyList<ChatMessage>? history,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(question))
@@ -83,12 +92,11 @@ public sealed class ChatService : IChatService
             yield break;
         }
 
-        var prompt = BuildPrompt(question, BuildContext(chunks));
+        var prompt = BuildPrompt(question, BuildContext(chunks), history);
 
         yield return new ChatStreamUpdate(ChatStreamStatus.Thinking, null, null);
 
         // Strömma tokens, buffra till hela ord och håll tillbaka AVBÖJER-markören
-        // så den aldrig skickas ut i deltan.
         var fullAnswer = new StringBuilder();
         var pending = new StringBuilder();
         var prefixDecisionMade = false;
@@ -101,12 +109,11 @@ public sealed class ChatService : IChatService
             if (!prefixDecisionMade)
             {
                 if (ChatStreamHelper.CouldBeRefusalPrefix(fullAnswer.ToString()))
-                    continue; // Kan vara början på AVBÖJER: — vänta på fler tecken.
+                    continue;
 
                 prefixDecisionMade = true;
                 if (ChatStreamHelper.StartsWithRefusalPrefix(fullAnswer.ToString()))
                 {
-                    // Ta bort markören från det som ska skickas ut.
                     pending.Clear();
                     pending.Append(ChatStreamHelper.TrimRefusalPrefix(fullAnswer.ToString()));
                 }
@@ -124,7 +131,6 @@ public sealed class ChatService : IChatService
         var answer = fullAnswer.ToString();
         if (IsRefusalAnswer(answer))
         {
-            // Spara trimmad text så AVBÖJER aldrig når frontend.
             yield return new ChatStreamUpdate(
                 ChatStreamStatus.Done, null,
                 ChatResponse.Refused(ChatStreamHelper.TrimRefusalPrefix(answer)));
@@ -149,8 +155,21 @@ public sealed class ChatService : IChatService
         return contextBuilder.ToString();
     }
 
-    private static string BuildPrompt(string question, string context)
+    private static string BuildPrompt(string question, string context, IReadOnlyList<ChatMessage>? history = null)
     {
+        var historyBuilder = new StringBuilder();
+        if (history is not null && history.Count > 0)
+        {
+            historyBuilder.AppendLine("Tidigare meddelanden i samtalet (använd som sammanhang vid följdfrågor):");
+            var recentHistory = history.TakeLast(6);
+            foreach (var msg in recentHistory)
+            {
+                var roleLabel = msg.Role == ChatMessage.UserRole ? "Medarbetare" : "Assistent";
+                historyBuilder.AppendLine($"{roleLabel}: {msg.Content}");
+            }
+            historyBuilder.AppendLine();
+        }
+
         return $"""
             Du är en hjälpsam personalassistent för Kalle Anka AB.
             Ditt uppdrag är att vägleda medarbetare i frågor om personal, anställningsvillkor, förmåner, arbetsmiljö och säkerhet.
@@ -160,14 +179,15 @@ public sealed class ChatService : IChatService
             - Utdragen ur personalhandboken är ofta skrivna på engelska. Du MÅSTE översätta ALLA engelska begrepp, förmåner, titlar och beskrivningar till naturlig svenska. Inga engelska fraser eller uttryck får lämnas oöversatta i svaret.
             - Etablerade program- och produktnamn (som PerksPlus eller Northwind) kan nämnas vid namn, men all förklarande text och alla förmåner ska vara på ren svenska.
             - Koppla medarbetarens svenska frågor till motsvarande engelska begrepp i utdragen.
-            
+
             Bemötande och eskalering:
+            - Följdfrågor och kontext: Använd tidigare meddelanden i samtalet för att förstå följdfrågor (t.ex. "vad menade du med det?" eller "hur många veckor var den högsta nivån?").
             - Frågor eller konflikter som rör närmaste chef: Om medarbetarens ärende, konflikt eller missnöje berör den egna chefen, ska du ALDRIG hänvisa till chefen själv. Hänvisa istället uteslutande till alternativa vägar: HR/personalavdelningen, överordnad chef, skyddsombud eller företagets compliance/visselblåsarfunktion.
             - Våld, hot eller olagligheter: Du får aldrig hjälpa till med våld, att skada någon eller begå brott. Vid hot, aggressioner eller våld på arbetsplatsen ska du hänvisa till företagets nolltolerans mot arbetsplatsvåld, HR, skyddsombud och vid akut fara larmnumret 112.
             - Tolka användarens avsikt välvilligt: även korta eller vardagliga frågor ska besvaras med relevanta rutiner och riktlinjer om de finns i texten.
-            
+
             Regler för svar och avböjning:
-            1. Basera ditt svar ENBART på informationen i de bifogade utdragen nedan. Hitta INTE på fakta som inte stöds av texten.
+            1. Basera ditt svar ENBART på informationen i de bifogade utdragen nedan samt tidigare meddelanden i samtalet. Hitta INTE på fakta som inte stöds av texten.
             2. Om utdragen innehåller information som berör frågan (även om det bara är delar eller en översikt), ska du BESVARA frågan med den fakta som finns (översatt till svenska). Om specifika detaljer saknas, nämn i slutet vad som inte framgår i handboken. Använd INTE ordet "AVBÖJER" i dessa fall.
             3. Inled svaret med ordet "AVBÖJER:" ENBART om:
                - Utdragen HELT saknar relevant information om det efterfrågade ämnet, ELLER
@@ -175,11 +195,10 @@ public sealed class ChatService : IChatService
             4. Skriv svaret i ren text (plain text) utan Markdown: inga asterisker (**fetstil**), inga taggar (#) och inga kodblock. För punktlistor, använd vanliga bindestreck (-).
             5. Använd uteslutande det latinska alfabetet (med å, ä, ö), siffror och vanliga skiljetecken. Använd aldrig tecken från andra skriftsystem.
 
-            
-            Bifogade utdrag ur personalhandboken:
+            {historyBuilder}Bifogade utdrag ur personalhandboken:
             {context}
 
-            Fråga från medarbetare:
+            Aktuell fråga från medarbetare:
             {question}
 
             Svar:

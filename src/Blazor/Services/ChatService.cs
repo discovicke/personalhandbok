@@ -1,5 +1,6 @@
 using System.Text;
-using Shared.Models;
+using Blazor.Models;
+using Blazor.Services.Interfaces;
 
 namespace Blazor.Services;
 

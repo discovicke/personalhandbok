@@ -1,6 +1,6 @@
-using Shared.Models;
+using Blazor.Models;
 
-namespace Blazor.Services;
+namespace Blazor.Services.Interfaces;
 
 /// <summary>Tjänst för att besvara personalfrågor via RAG (Search + OpenAI).</summary>
 public interface IChatService

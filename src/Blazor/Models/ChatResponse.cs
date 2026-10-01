@@ -1,4 +1,4 @@
-namespace Shared.Models;
+namespace Blazor.Models;
 
 /// <summary>Källhänvisning för ett svar. ChunkId möjliggör hopp-till-källa senare.</summary>
 public sealed record Citation(

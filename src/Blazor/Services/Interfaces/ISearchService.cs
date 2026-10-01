@@ -1,6 +1,6 @@
-using Shared.Models;
+using Blazor.Models;
 
-namespace Blazor.Services;
+namespace Blazor.Services.Interfaces;
 
 /// <summary>Sparar textbitar och söker bland dem.</summary>
 public interface ISearchService

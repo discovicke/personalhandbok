@@ -1,4 +1,4 @@
-namespace Blazor.Services;
+namespace Blazor.Services.Interfaces;
 
 /// <summary>Kommunicerar med Azure OpenAI.</summary>
 public interface IOpenAiService

@@ -1,4 +1,4 @@
-namespace Shared.Models;
+namespace Blazor.Models;
 
 /// <summary>Metadata för ett uppladdat dokument. <see cref="Id"/> är också dokument-id i sökningen.</summary>
 public sealed record DocumentMetadata(

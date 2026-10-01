@@ -2,8 +2,9 @@ using Azure;
 using Azure.Search.Documents.Indexes;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Shared.Config;
-using Shared.Models;
+using Blazor.Config;
+using Blazor.Models;
+using Blazor.Services.Interfaces;
 
 namespace Blazor.Services;
 

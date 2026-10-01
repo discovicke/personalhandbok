@@ -1,6 +1,7 @@
 using Blazor.Components;
+using Blazor.Config;
 using Blazor.Services;
-using Shared.Config;
+using Blazor.Services.Interfaces;
 
 EnvLoader.Load();
 

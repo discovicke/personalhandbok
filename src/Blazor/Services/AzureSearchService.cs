@@ -3,8 +3,9 @@ using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Indexes.Models;
 using Azure.Search.Documents.Models;
-using Shared.Config;
-using Shared.Models;
+using Blazor.Config;
+using Blazor.Models;
+using Blazor.Services.Interfaces;
 
 namespace Blazor.Services;
 

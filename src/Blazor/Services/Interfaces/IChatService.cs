@@ -10,4 +10,7 @@ public interface IChatService
         string question, 
         IReadOnlyList<ChatMessage>? history = null, 
         CancellationToken ct = default);
+
+    /// <summary>Strömmar svaret: Searching (söker i dokument), Thinking (tänker), Token (ord) och Done (slutgiltigt svar).</summary>
+    IAsyncEnumerable<ChatStreamUpdate> AskStreamingAsync(string question, CancellationToken ct = default);
 }

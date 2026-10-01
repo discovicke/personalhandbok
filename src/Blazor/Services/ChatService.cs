@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using Blazor.Models;
 using Blazor.Services.Interfaces;
@@ -37,6 +38,109 @@ public sealed class ChatService : IChatService
         }
 
         // 2. Sammanställ kontext från träffarna
+        var context = BuildContext(chunks);
+
+        // 3. Bygg prompten med historik
+        var prompt = BuildPrompt(question, context, history);
+
+        // 4. Ställ frågan till OpenAI
+        var answer = await _openAiService.SendMessageAsync(prompt, ct: ct);
+
+        // 5. Om modellen avböjde -> IsRefused = true med rensad text
+        if (IsRefusalAnswer(answer))
+        {
+            return ChatResponse.Refused(ChatStreamHelper.TrimRefusalPrefix(answer));
+        }
+
+        // 6. Skapa källhänvisningar (Citations)
+        return new ChatResponse(
+            Answer: answer,
+            IsRefused: false,
+            RefusalReason: null,
+            Citations: BuildCitations(chunks));
+    }
+
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<ChatStreamUpdate> AskStreamingAsync(
+        string question,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(question))
+        {
+            yield return new ChatStreamUpdate(
+                ChatStreamStatus.Done, null,
+                ChatResponse.Refused("Ställ en fråga för att få ett svar."));
+            yield break;
+        }
+
+        yield return new ChatStreamUpdate(ChatStreamStatus.Searching, null, null);
+
+        var chunks = await _searchService.SearchAsync(question, top: 5, ct: ct);
+
+        if (chunks.Count == 0)
+        {
+            yield return new ChatStreamUpdate(
+                ChatStreamStatus.Done, null,
+                ChatResponse.Refused("Jag hittade tyvärr ingen information om detta i personalhandboken."));
+            yield break;
+        }
+
+        var prompt = BuildPrompt(question, BuildContext(chunks));
+
+        yield return new ChatStreamUpdate(ChatStreamStatus.Thinking, null, null);
+
+        // Strömma tokens, buffra till hela ord och håll tillbaka AVBÖJER-markören
+        // så den aldrig skickas ut i deltan.
+        var fullAnswer = new StringBuilder();
+        var pending = new StringBuilder();
+        var prefixDecisionMade = false;
+
+        await foreach (var token in _openAiService.SendMessageStreamingAsync(prompt, ct))
+        {
+            fullAnswer.Append(token);
+            pending.Append(token);
+
+            if (!prefixDecisionMade)
+            {
+                if (ChatStreamHelper.CouldBeRefusalPrefix(fullAnswer.ToString()))
+                    continue; // Kan vara början på AVBÖJER: — vänta på fler tecken.
+
+                prefixDecisionMade = true;
+                if (ChatStreamHelper.StartsWithRefusalPrefix(fullAnswer.ToString()))
+                {
+                    // Ta bort markören från det som ska skickas ut.
+                    pending.Clear();
+                    pending.Append(ChatStreamHelper.TrimRefusalPrefix(fullAnswer.ToString()));
+                }
+            }
+
+            var words = ChatStreamHelper.ExtractCompleteWords(pending);
+            if (words.Length > 0)
+                yield return new ChatStreamUpdate(ChatStreamStatus.Token, words, null);
+        }
+
+        var tail = pending.ToString();
+        if (tail.Length > 0)
+            yield return new ChatStreamUpdate(ChatStreamStatus.Token, tail, null);
+
+        var answer = fullAnswer.ToString();
+        if (IsRefusalAnswer(answer))
+        {
+            // Spara trimmad text så AVBÖJER aldrig når frontend.
+            yield return new ChatStreamUpdate(
+                ChatStreamStatus.Done, null,
+                ChatResponse.Refused(ChatStreamHelper.TrimRefusalPrefix(answer)));
+        }
+        else
+        {
+            yield return new ChatStreamUpdate(
+                ChatStreamStatus.Done, null,
+                new ChatResponse(answer, false, null, BuildCitations(chunks)));
+        }
+    }
+
+    private static string BuildContext(IReadOnlyList<SearchChunk> chunks)
+    {
         var contextBuilder = new StringBuilder();
         foreach (var chunk in chunks)
         {
@@ -44,8 +148,11 @@ public sealed class ChatService : IChatService
             contextBuilder.AppendLine(chunk.Content);
             contextBuilder.AppendLine();
         }
+        return contextBuilder.ToString();
+    }
 
-        // 3. Bygg samtalshistorik om det finns tidigare meddelanden (upp till 6 senaste för att hålla prompten fokuserad)
+    private static string BuildPrompt(string question, string context, IReadOnlyList<ChatMessage>? history = null)
+    {
         var historyBuilder = new StringBuilder();
         if (history is not null && history.Count > 0)
         {
@@ -59,8 +166,7 @@ public sealed class ChatService : IChatService
             historyBuilder.AppendLine();
         }
 
-        // 4. Bygg prompten med historik, utdrag och regler
-        var prompt = $"""
+        return $"""
             Du är en hjälpsam personalassistent för Kalle Anka AB.
             Ditt uppdrag är att vägleda medarbetare i frågor om personal, anställningsvillkor, förmåner, arbetsmiljö och säkerhet.
             Svara alltid på naturlig, professionell och korrekt svenska.
@@ -86,50 +192,31 @@ public sealed class ChatService : IChatService
             5. Använd uteslutande det latinska alfabetet (med å, ä, ö), siffror och vanliga skiljetecken. Använd aldrig tecken från andra skriftsystem.
 
             {historyBuilder}Bifogade utdrag ur personalhandboken:
-            {contextBuilder}
+            {context}
 
             Aktuell fråga från medarbetare:
             {question}
 
             Svar:
             """;
+    }
 
-        // 5. Ställ frågan till OpenAI
-        var answer = await _openAiService.SendMessageAsync(prompt, ct: ct);
+    /// <summary>True om modellen avböjde (ej personalfråga eller saknas i handboken).</summary>
+    private static bool IsRefusalAnswer(string answer) =>
+        ChatStreamHelper.StartsWithRefusalPrefix(answer) ||
+        answer.Contains("bara besvara frågor", StringComparison.OrdinalIgnoreCase) ||
+        answer.Contains("saknas i personalhandboken", StringComparison.OrdinalIgnoreCase) ||
+        answer.Contains("saknas information", StringComparison.OrdinalIgnoreCase);
 
-        // 6. Kontrollera om modellen avböjde
-        var trimmedAnswer = answer.TrimStart();
-        if (trimmedAnswer.StartsWith("AVBÖJER:", StringComparison.OrdinalIgnoreCase) ||
-            trimmedAnswer.StartsWith("AVBOJER:", StringComparison.OrdinalIgnoreCase) ||
-            answer.Contains("bara besvara frågor", StringComparison.OrdinalIgnoreCase) ||
-            answer.Contains("saknas i personalhandboken", StringComparison.OrdinalIgnoreCase) ||
-            answer.Contains("saknas information", StringComparison.OrdinalIgnoreCase))
-        {
-            var cleanReason = trimmedAnswer.StartsWith("AVBÖJER:", StringComparison.OrdinalIgnoreCase)
-                ? trimmedAnswer["AVBÖJER:".Length..].Trim()
-                : (trimmedAnswer.StartsWith("AVBOJER:", StringComparison.OrdinalIgnoreCase)
-                    ? trimmedAnswer["AVBOJER:".Length..].Trim()
-                    : answer.Trim());
-
-            return ChatResponse.Refused(cleanReason);
-        }
-
-        // 7. Skapa källhänvisningar (Citations)
-        var citations = chunks.Select(c => new Citation(
+    private static List<Citation> BuildCitations(IReadOnlyList<SearchChunk> chunks) =>
+        chunks.Select(c => new Citation(
             DocumentId: c.DocumentId,
             FileName: c.FileName,
-            Quote: c.Content.Length > 200 
-                ? c.Content[..200] + "..." 
+            Quote: c.Content.Length > 200
+                ? c.Content[..200] + "..."
                 : c.Content,
-            ChunkId: c.ChunkIndex > 0 
-                ? $"Sida {c.ChunkIndex}" 
+            ChunkId: c.ChunkIndex > 0
+                ? $"Sida {c.ChunkIndex}"
                 : null
         )).ToList();
-
-        return new ChatResponse(
-            Answer: answer,
-            IsRefused: false,
-            RefusalReason: null,
-            Citations: citations);
-    }
 }

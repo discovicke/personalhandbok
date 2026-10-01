@@ -27,7 +27,7 @@
     @if (conversation.Count == 0 && !isLoading)
     {
         <div class="card p-4 text-center text-muted bg-light border-0 my-4">
-            <h5>Välkommen till personalassistenten!</h5>
+            <h5>Välkommen till personalassistenten</h5>
             <p class="mb-0">
                 Ställ en fråga om anställningsvillkor, förmåner, semester eller säkerhet.<br />
                 <em>Exempel: "Vad gäller för semester?" eller "Vad ingår i friskvårdsbidraget?"</em>
@@ -78,7 +78,7 @@
             }
             else
             {
-                <!-- Godkänt svar (grönt kort med källor) -->
+                <!-- Godkänt svar (grönt kort) -->
                 <div class="d-flex justify-content-start mb-3">
                     <div class="card border-success shadow-sm" style="max-width: 85%;">
                         <div class="card-header bg-success text-white py-1 px-3 d-flex justify-content-between align-items-center">
@@ -91,19 +91,23 @@
                         <div class="card-body py-2 px-3">
                             <p class="card-text mb-0" style="white-space: pre-wrap;">@msg.Content</p>
 
+                            <!-- Kollapsbara källor (stängda som standard, helt utan emojis) -->
                             @if (msg.Citations is not null && msg.Citations.Count > 0)
                             {
-                                <hr class="my-2" />
-                                <h6 class="small text-muted mb-2">Källor och referenser (@msg.Citations.Count st):</h6>
-                                <ul class="list-group list-group-flush small">
-                                    @foreach (var citation in msg.Citations)
-                                    {
-                                        <li class="list-group-item bg-light mb-1 border rounded py-1 px-2">
-                                            <div><strong>Dokument:</strong> @citation.FileName @(string.IsNullOrWhiteSpace(citation.ChunkId) ? "" : $"({citation.ChunkId})")</div>
-                                            <div class="text-muted small mt-1"><em>"@citation.Quote"</em></div>
-                                        </li>
-                                    }
-                                </ul>
+                                <details class="mt-2 border-top pt-2">
+                                    <summary class="small text-muted" style="cursor: pointer; user-select: none;">
+                                        Visa källor och referenser (@msg.Citations.Count st)
+                                    </summary>
+                                    <ul class="list-group list-group-flush small mt-2">
+                                        @foreach (var citation in msg.Citations)
+                                        {
+                                            <li class="list-group-item bg-light mb-1 border rounded py-1 px-2">
+                                                <div><strong>Dokument:</strong> @citation.FileName @(string.IsNullOrWhiteSpace(citation.ChunkId) ? "" : $"({citation.ChunkId})")</div>
+                                                <div class="text-muted small mt-1"><em>"@citation.Quote"</em></div>
+                                            </li>
+                                        }
+                                    </ul>
+                                </details>
                             }
                         </div>
                     </div>
@@ -112,14 +116,14 @@
         }
     }
 
-    <!-- Laddningsindikator -->
-    @if (isLoading)
+    <!-- Statusindikator vid streaming (söker / tänker) -->
+    @if (isLoading && !string.IsNullOrEmpty(streamStatusMessage))
     {
         <div class="d-flex justify-content-start mb-3">
             <div class="card border-secondary bg-light shadow-sm" style="max-width: 85%;">
                 <div class="card-body py-2 px-3 d-flex align-items-center gap-2">
                     <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                    <span class="text-muted small">Assistenten söker i handboken och tänker...</span>
+                    <span class="text-muted small">@streamStatusMessage</span>
                 </div>
             </div>
         </div>
@@ -162,6 +166,7 @@
     private List<ConversationMessage> conversation = [];
     private string userQuestion = "";
     private string? errorMessage;
+    private string? streamStatusMessage;
     private bool isLoading;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -183,7 +188,7 @@
             }
             catch
             {
-                // Ignorera fel om localStorage t.ex. är blockerat i webbläsaren
+                // Ignorera fel vid ev. webbläsarbegränsningar
             }
         }
     }
@@ -196,31 +201,84 @@
         var question = userQuestion.Trim();
         userQuestion = string.Empty;
         errorMessage = null;
+        streamStatusMessage = "Söker i personalhandboken...";
 
-        // 1. Skapa användarmeddelande och lägg till i listan
+        // 1. Lägg till användarfrågan i tråden
         var userMsg = ConversationMessage.CreateUser(question);
         conversation.Add(userMsg);
         isLoading = true;
 
-        // Spara frågan direkt i localStorage så att den syns även om användaren laddar om sidan
         await SaveToLocalStorageAsync();
+        StateHasChanged();
 
         try
         {
-            // 2. Extrahera alla tidigare meddelanden (före den aktuella frågan) som historik till AI:n
+            // 2. Extrahera tidigare meddelanden som kontext för följdfrågor
             var history = conversation
                 .Take(conversation.Count - 1)
                 .Select(m => m.ToChatMessage())
                 .ToList();
 
-            // 3. Ställ frågan till ChatService med samtalshistorik
-            var response = await ChatService.AskAsync(question, history);
+            // 3. Skapa en live-assistentbubbla som fylls på under streamingen
+            var liveAssistantMsg = new ConversationMessage(
+                Role: ConversationMessage.AssistantRole,
+                Content: string.Empty,
+                Timestamp: DateTime.Now);
 
-            // 4. Lägg till assistentens svar i samtalet
-            var assistantMsg = ConversationMessage.CreateAssistant(response);
-            conversation.Add(assistantMsg);
+            var assistantAddedToThread = false;
 
-            // 5. Spara uppdaterat samtal till localStorage
+            // 4. Strömma svaret token för token
+            await foreach (var update in ChatService.AskStreamingAsync(question, history))
+            {
+                switch (update.Status)
+                {
+                    case ChatStreamStatus.Searching:
+                        streamStatusMessage = "Söker i personalhandboken...";
+                        StateHasChanged();
+                        break;
+
+                    case ChatStreamStatus.Thinking:
+                        streamStatusMessage = "Formulerar svar...";
+                        StateHasChanged();
+                        break;
+
+                    case ChatStreamStatus.Token:
+                        streamStatusMessage = null;
+
+                        if (!assistantAddedToThread)
+                        {
+                            conversation.Add(liveAssistantMsg);
+                            assistantAddedToThread = true;
+                        }
+
+                        liveAssistantMsg = liveAssistantMsg with 
+                        { 
+                            Content = liveAssistantMsg.Content + update.Delta 
+                        };
+                        conversation[^1] = liveAssistantMsg;
+                        StateHasChanged();
+                        break;
+
+                    case ChatStreamStatus.Done:
+                        streamStatusMessage = null;
+                        if (update.Final is not null)
+                        {
+                            var finalMsg = ConversationMessage.CreateAssistant(update.Final);
+                            if (assistantAddedToThread)
+                            {
+                                conversation[^1] = finalMsg;
+                            }
+                            else
+                            {
+                                conversation.Add(finalMsg);
+                            }
+                        }
+                        StateHasChanged();
+                        break;
+                }
+            }
+
+            // 5. Spara det färdiga samtalet till localStorage
             await SaveToLocalStorageAsync();
         }
         catch (Exception ex)
@@ -230,6 +288,8 @@
         finally
         {
             isLoading = false;
+            streamStatusMessage = null;
+            StateHasChanged();
         }
     }
 

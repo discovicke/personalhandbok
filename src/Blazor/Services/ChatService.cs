@@ -61,8 +61,15 @@ public sealed class ChatService : IChatService
     }
 
     /// <inheritdoc/>
+    public IAsyncEnumerable<ChatStreamUpdate> AskStreamingAsync(
+        string question,
+        CancellationToken ct = default) =>
+        AskStreamingAsync(question, null, ct);
+
+    /// <inheritdoc/>
     public async IAsyncEnumerable<ChatStreamUpdate> AskStreamingAsync(
         string question,
+        IReadOnlyList<ChatMessage>? history,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(question))
@@ -85,12 +92,11 @@ public sealed class ChatService : IChatService
             yield break;
         }
 
-        var prompt = BuildPrompt(question, BuildContext(chunks));
+        var prompt = BuildPrompt(question, BuildContext(chunks), history);
 
         yield return new ChatStreamUpdate(ChatStreamStatus.Thinking, null, null);
 
         // Strömma tokens, buffra till hela ord och håll tillbaka AVBÖJER-markören
-        // så den aldrig skickas ut i deltan.
         var fullAnswer = new StringBuilder();
         var pending = new StringBuilder();
         var prefixDecisionMade = false;
@@ -103,12 +109,11 @@ public sealed class ChatService : IChatService
             if (!prefixDecisionMade)
             {
                 if (ChatStreamHelper.CouldBeRefusalPrefix(fullAnswer.ToString()))
-                    continue; // Kan vara början på AVBÖJER: — vänta på fler tecken.
+                    continue;
 
                 prefixDecisionMade = true;
                 if (ChatStreamHelper.StartsWithRefusalPrefix(fullAnswer.ToString()))
                 {
-                    // Ta bort markören från det som ska skickas ut.
                     pending.Clear();
                     pending.Append(ChatStreamHelper.TrimRefusalPrefix(fullAnswer.ToString()));
                 }
@@ -126,7 +131,6 @@ public sealed class ChatService : IChatService
         var answer = fullAnswer.ToString();
         if (IsRefusalAnswer(answer))
         {
-            // Spara trimmad text så AVBÖJER aldrig når frontend.
             yield return new ChatStreamUpdate(
                 ChatStreamStatus.Done, null,
                 ChatResponse.Refused(ChatStreamHelper.TrimRefusalPrefix(answer)));

@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Runtime.CompilerServices;
 using OpenAI;
 using OpenAI.Chat;
 using Blazor.Config;
@@ -33,6 +34,27 @@ public sealed class AzureOpenAiService : IOpenAiService
             [new UserChatMessage(prompt)], 
             cancellationToken: ct);
 
-        return result.Value.Content.Count > 0 ? result.Value.Content[0].Text : string.Empty;
+        return result.Value.Content.Count > 0 
+            ? result.Value.Content[0].Text 
+            : string.Empty;
+    }
+
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<string> SendMessageStreamingAsync(
+        string prompt,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var updates = _chatClient.CompleteChatStreamingAsync(
+            [new UserChatMessage(prompt)],
+            cancellationToken: ct);
+
+        await foreach (var update in updates)
+        {
+            foreach (var part in update.ContentUpdate)
+            {
+                if (!string.IsNullOrEmpty(part.Text))
+                    yield return part.Text;
+            }
+        }
     }
 }

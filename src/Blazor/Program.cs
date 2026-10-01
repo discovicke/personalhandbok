@@ -1,5 +1,6 @@
 using Blazor.Components;
 using Blazor.Config;
+using Blazor.Endpoints;
 using Blazor.Services;
 using Blazor.Services.Interfaces;
 
@@ -31,6 +32,7 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapChatStream();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

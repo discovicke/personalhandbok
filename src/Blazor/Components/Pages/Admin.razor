@@ -66,7 +66,7 @@ else
                     </div>
 
                     <small class="text-muted">
-                        @fil.SizeBytes bytes
+                        @FormatStorlek(fil.SizeBytes)
                         ·
                         @fil.UploadedAt.LocalDateTime.ToShortDateString()
                     </small>
@@ -174,5 +174,25 @@ else
         {
             feltext = AzureErrorHandler.UserFriendlyError(ex);
         }
+    }
+
+    private static string FormatStorlek(long bytes)
+    {
+        if (bytes < 0)
+            bytes = 0;
+
+        string[] enheter = ["B", "KB", "MB", "GB", "TB"];
+        double storlek = bytes;
+        var enhet = 0;
+
+        while (storlek >= 1024 && enhet < enheter.Length - 1)
+        {
+            storlek /= 1024;
+            enhet++;
+        }
+
+        return enhet == 0
+            ? $"{bytes} B"
+            : $"{storlek:0.##} {enheter[enhet]}";
     }
 }
